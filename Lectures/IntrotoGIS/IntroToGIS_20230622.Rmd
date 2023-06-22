@@ -1,0 +1,255 @@
+---
+title: "PHI ARFP 2023: Introduction to GIS"
+author: "Jessica Godwin"
+date: "June 22, 2023"
+output: 
+ html_document:
+   toc: true
+---
+
+```{r setup, echo = FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+knitr::opts_knit$set(root.dir = 'U:/PHI-ARFP-2023/Lectures/IntrotoGIS')
+
+```
+
+# Setup
+## Load Libraries
+
+```{r load_lib}
+library(tidycensus)
+library(sf)
+library(ggplot2)
+library(gridExtra)
+library(dplyr)
+library(tidyr)
+```
+
+# GIS in R: `sf` and `sp`
+Note: The following text was one of the first published for spatial data analysis in `R`, and relied on the `sp` package. 
+
+Bivand, R. S., Pebesma, E. J., & Gomez-Rubio, V. (2008). *Applied spatial data analysis with R*. Springer.
+
+In August, many parts of `sp` will be deprecated, and folks are moving to `sf`. Bivand and Pebesma have published an updated eBook here: [https://r-spatial.org/book/](https://r-spatial.org/book/)
+
+`sf` cheetsheet here: [https://github.com/rstudio/cheatsheets/blob/main/sf.pdf](https://github.com/rstudio/cheatsheets/blob/main/sf.pdf)
+
+## Spatial Data & `R` Objects
+
+Spatial data can come in many forms, which are generalized into the following categories:
+
+  * Points: GPS locations
+  * Lines: Streets, rivers, transit lines
+  * Polygons: Nations, states, counties, cities, Census tracts, lakes
+  * Pixels (Rasters): Satellite imagine, remote sensing, continuous space
+  
+`sf` handles all of these fairly well, but in `sp` each type of data was given a separate object type in `R` (like the difference between a `matrix` and a `data.frame`).
+
+
+# `tidycensus` and Polygons
+
+  *  `R` Package by [Kyle Walker](https://github.com/walkerke).
+    *  Tidy for engaging with US Census and ACS data
+    * [Basic Use Vignette](https://walker-data.com/tidycensus/articles/basic-usage.html)
+    *  Get [Census API key](http://api.census.gov/data/key_signup.html)  
+  *  Book: [Analyzing US Census Data: Methods, Maps, and Models in R](https://walker-data.com/census-r/)
+ 
+
+```{r loadtidy}
+vignette("tidycensus")
+
+## Load API key ####
+source("U:/PHI-ARFP-2023/Lectures/IntrotoGIS/CensusAPIKey.R")
+census_api_key(myKey) 
+
+### Option to cache tidycensus shapefiles ####
+options(tigris_use_cache = TRUE)
+```
+
+## Getting variable names
+```{r tidycensus_vars}
+?get_acs
+acs_var_df <- load_variables(2021, "acs5", cache = TRUE)
+View(acs_var_df)
+
+?get_decennial
+dec_var_df <- load_variables(2020, "pl", cache = TRUE)
+View(dec_var_df)
+```
+
+## Creating a polygon with data
+
+  * You can pull Census or ACS tables without geometry by specifying `geometry = FALSE`. 
+  *  The `geography` argument has different options for specifications based on what year and data type you are requesting. 
+
+```{r pull_census}
+kingco_hu <- get_decennial(geography = "tract",
+                           variables = c("H1_001N", "H1_002N",
+                                         "H1_003N"),
+                           state = "WA",
+                           county = "King",
+                           year = 2020,
+                           sumfile = "pl",
+                           geometry = TRUE)
+
+View(kingco_hu)
+summary(kingco_hu)
+unique(kingco_hu$variable)
+```
+
+## Plot with `ggplot`
+
+```{r tidycensus_plots}
+kingco_hu %>% 
+  ## We have 3 vars in long form data,
+  ## i.e. each polygon has three rows in the data,
+  ## let's filter down to total housing units
+  filter(variable == "H1_001N") %>% 
+  ggplot() +
+  geom_sf(aes(fill = value)) 
+
+kingco_hu %>% 
+  filter(variable == "H1_001N") %>% 
+  ggplot() +
+  ## size makes polygon lines smaller
+  geom_sf(aes(fill = value), size = .25) +
+  ## Nice palette, and reverse direction
+  ## so light is small, dark is large
+  scale_fill_viridis_c(direction = -1,
+                       name = "Units") + 
+  ggtitle("King County Census Tracts (2020)") +
+  ## git rid of long lat axes
+  theme_void()
+```
+
+## Multiple variables with the same map
+
+```{r facet_pivot}
+kingco_hu %>% 
+  ggplot() +
+  geom_sf(aes(fill = value), size = .25) +
+  scale_fill_viridis_c(direction = -1,
+                       name = "Units") + 
+  facet_wrap(~variable) +
+  ggtitle("King County Census Tracts (2020)") +
+  theme_void()
+
+kingco_hu_wide <- kingco_hu %>% 
+  pivot_wider(id_cols = c("GEOID", "NAME", "geometry"),
+               names_from = "variable",
+               values_from = "value")
+
+range(kingco_hu$value)
+hu_tot <- kingco_hu_wide %>% 
+  ggplot() +
+  geom_sf(aes(fill = H1_001N), size = 0.25) +
+  scale_fill_viridis_c(direction = -1,
+                       name = "Units",
+                       breaks = c(0, 100, 500,
+                                  1000, 1500,
+                                  2000, 2500,
+                                  3000, 3500,
+                                  3750)) + 
+  ggtitle("Total") +
+  theme_void()
+
+hu_occ <- kingco_hu_wide %>% 
+  ggplot() +
+  geom_sf(aes(fill = H1_002N), size = 0.25) +
+  scale_fill_viridis_c(direction = -1,
+                       name = "Units",
+                       breaks = c(0, 100, 500,
+                                  1000, 1500,
+                                  2000, 2500,
+                                  3000, 3500,
+                                  3750)) + 
+  ggtitle("Occupied") +
+  theme_void()
+
+hu_vac <- kingco_hu_wide %>% 
+  ggplot() +
+  geom_sf(aes(fill = H1_003N), size = 0.25) +
+  scale_fill_viridis_c(direction = -1,
+                       name = "Units",
+                       breaks = c(0, 100, 500,
+                                  1000, 1500,
+                                  2000, 2500,
+                                  3000, 3500,
+                                  3750)) + 
+  ggtitle("Vacant") +
+  theme_void()
+
+grid.arrange(hu_tot, hu_occ, hu_vac, nrow = 2)
+```
+
+# Coordinate reference systems and combining spatial data
+ 
+  * ESRI (a company one of whose products is ArcGIS) shapefiles consist of at least three files, and this is a common form. The first file `.shp` contains the geography of each shape. The second file `shx` is an index file which contains record offsets. The third file `.dbf` contains feature attributes with one record per feature.
+  * To combine multiple spatial objects, they must be on the same *coordinate reference system*.
+  
+Download King County school locations data from [https://gis-kingcounty.opendata.arcgis.com/datasets/school-sites-in-king-county-schsite-point?geometry=-123.799%2C47.157%2C-120.017%2C47.807](https://gis-kingcounty.opendata.arcgis.com/datasets/school-sites-in-king-county-schsite-point?geometry=-123.799%2C47.157%2C-120.017%2C47.807)
+```{r download_points}
+kc_schools <- read_sf("U:/PHI-ARFP-2023/Lectures/IntrotoGIS/School_Sites_in_King_County___schsite_point")
+
+head(kc_schools)
+
+st_crs(kc_schools)
+st_crs(kingco_hu)
+
+kc_schools <- kc_schools %>% 
+  st_transform(crs = st_crs(kingco_hu))
+
+st_crs(kc_schools)
+```
+
+## Plots with points and polygons
+
+```{r 2sf}
+kingco_hu_wide %>% 
+  ggplot() +
+  geom_sf(aes(fill = H1_001N), size = 0.25) +
+  scale_fill_viridis_c(direction = -1,
+                       name = "Units",
+                       breaks = c(0, 100, 500,
+                                  1000, 1500,
+                                  2000, 2500,
+                                  3000, 3500,
+                                  3750)) + 
+  geom_point(data = kc_schools, aes(x = LONG_CEN, y = LAT_CEN,
+                                    color = "white")) +
+  ggtitle("Total") +
+  theme_void()
+```
+
+
+## Plots with two polygons
+
+```{r 2sf2}
+seattle <- read_sf("U:/PHI-ARFP-2023/Lectures/IntrotoGIS/City_of_Seattle_Shoreline/")
+
+st_crs(seattle)
+
+seattle <- st_transform(seattle, crs = st_crs(kingco_hu))
+
+seattle_idx <- st_intersects(kingco_hu_wide, seattle)
+head(seattle_idx)
+
+king_idx_todrop <- lapply(seattle_idx, function(data_row){
+  length(data_row) == 0
+}) %>% unlist() %>% which()
+
+
+kingco_hu_wide %>%
+  slice(-king_idx_todrop) %>% 
+  ggplot() +
+  geom_sf(aes(fill = H1_001N), size = 0.25) +
+  scale_fill_viridis_c(direction = -1,
+                       name = "Units",
+                       breaks = c(0, 100, 500,
+                                  1000, 1500,
+                                  2000, 2500,
+                                  3000, 3500,
+                                  3750)) +
+  ggtitle("Total") +
+  theme_void()
+```
