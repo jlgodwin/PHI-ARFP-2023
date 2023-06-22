@@ -9,7 +9,7 @@ output:
 
 ```{r setup, echo = FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-knitr::opts_knit$set(root.dir = '~/Dropbox/Workshops/IntroR/')
+knitr::opts_knit$set(root.dir = 'U:/PHI-ARFP-2023/Lectures/IntrotoR')
 ```
 
 # Getting started 
@@ -760,8 +760,7 @@ head(caf.sum.base)
 
 # Use the "aggregate" function
 ## Column names might have to be changed afterwards
-caf.sum.base <- aggregate(formula = 
-                            Caffeine ~ 1, 
+caf.sum.base <- aggregate(Caffeine ~ 1, 
                            data = caf.data,
                            FUN = function(x) c(mean = mean(x), sd = sd(x)))
 head(caf.sum.base)
@@ -783,7 +782,7 @@ names(caf.sum.dplyr)
 In many cases it's inconsequential whether you use base `R` or the `tidyverse`. Often `tidyr` and `dplyr` functions are a bit faster than `R`, but I find the `summarise`function in the `tidyverse` to be MUCH, MUCH slower than `aggregate` in base `R`.
 ```{r, echo = T, eval = T}
 data(mtcars)
-mtcars.sum.by <- aggregate(formula = cbind(mpg, wt) ~ cyl + gear, 
+mtcars.sum.by <- aggregate(cbind(mpg, wt) ~ cyl + gear, 
           data = mtcars, 
           FUN = function(x){
             c(mean = mean(x), sd = sd(x))
@@ -792,7 +791,7 @@ mtcars.sum.by <- aggregate(formula = cbind(mpg, wt) ~ cyl + gear,
 mtcars.sum.by
 
 mtcars$total <- 1
-mtcars.sum.by2 <- aggregate(formula = total ~ cyl + gear, 
+mtcars.sum.by2 <- aggregate(total ~ cyl + gear, 
           data = mtcars, 
           FUN = sum, drop = T)
 mtcars.sum.by2
